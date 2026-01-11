@@ -380,7 +380,7 @@ DevSecOps • Python/Django • Sécurité applicative • Expert Fintech
 - 📖 **Documentation** : [docs/](docs/)
 - 🐛 **Issues** : [GitHub Issues](https://github.com/g0sh5ukuna/img_to_txt_ocr/issues)
 - 💬 **Discussions** : [GitHub Discussions](https://github.com/g0sh5ukuna/img_to_txt_ocr/discussions)
-- 📧 **Email** : [votre-email]
+- 📧 **Email** : [josh.sounon@gmail.com]
 
 ---
 
