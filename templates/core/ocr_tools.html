@@ -1,0 +1,693 @@
+{% extends "base/base.html" %}
+{% load static %}
+
+{% block title %}Outils OCR{% endblock %}
+
+{% block content %}
+<div class="ocr-container">
+    <div class="page-header">
+        <h1>Extraction de texte OCR</h1>
+        <p>Uploadez un document pour extraire le texte</p>
+    </div>
+
+    <div class="ocr-layout">
+        <!-- Colonne gauche : Formulaire -->
+        <div class="ocr-form-column">
+            <div class="card">
+                <h2>Nouveau document</h2>
+                <form method="post" enctype="multipart/form-data" class="upload-form" id="upload-form">
+                    {% csrf_token %}
+                    
+                    <div class="form-group">
+                        <label for="{{ form.file.id_for_label }}" class="file-upload-label">
+                            <div class="file-upload-area" id="file-upload-area">
+                                <div class="file-upload-icon">📄</div>
+                                <div class="file-upload-text">
+                                    <span>Glissez votre fichier ici</span>
+                                    <span class="file-upload-sub">ou cliquez pour parcourir</span>
+                                </div>
+                                <div class="file-upload-formats">
+                                    JPEG, PNG, PDF, TIFF
+                                </div>
+                            </div>
+                            {{ form.file }}
+                        </label>
+                        
+                        <!-- Prévisualisation -->
+                        <div class="file-preview-container" id="file-preview" style="display: none;">
+                            <div class="file-preview-wrapper">
+                                <img id="file-preview-image" class="file-preview-image" style="display: none;" alt="Prévisualisation">
+                                <div id="file-preview-icon" class="file-preview-icon" style="display: none;"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="file-selected-info" id="file-selected-info" style="display: none;">
+                            <div class="file-info-content">
+                                <span class="file-icon">📄</span>
+                                <div class="file-info-text">
+                                    <span class="file-name" id="file-name"></span>
+                                    <span class="file-size" id="file-size"></span>
+                                </div>
+                                <button type="button" class="file-remove-btn" id="file-remove-btn">✕</button>
+                            </div>
+                        </div>
+                        {% if form.file.errors %}
+                            <div class="form-errors">{{ form.file.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="{{ form.language.id_for_label }}">{{ form.language.label }}</label>
+                        {{ form.language }}
+                        {% if form.language.help_text %}
+                            <small class="form-help">{{ form.language.help_text }}</small>
+                        {% endif %}
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="submit-btn">
+                        <span class="btn-text">Lancer l'extraction</span>
+                        <span class="btn-loader" style="display: none;">
+                            <span class="spinner"></span>
+                            Traitement...
+                        </span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Historique -->
+            {% if recent_documents %}
+            <div class="card">
+                <h2>Historique</h2>
+                <div class="documents-list">
+                    {% for doc in recent_documents %}
+                    <a href="{% url 'ocr_result' doc.id %}" class="document-item">
+                        <div class="document-info">
+                            <strong>{{ doc.file_name }}</strong>
+                            <span class="document-date">{{ doc.uploaded_at|date:"d/m/Y H:i" }}</span>
+                        </div>
+                        <span class="status-badge status-{{ doc.status }}">
+                            {{ doc.get_status_display }}
+                        </span>
+                    </a>
+                    {% endfor %}
+                </div>
+                <div class="documents-footer">
+                    <a href="{% url 'document_history' %}" class="btn btn-secondary">Voir tout</a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Colonne droite : Résultats -->
+        <div class="ocr-results-column">
+            {% if current_document %}
+                <div class="card results-card">
+                    <div class="results-header">
+                        <h2>Résultat</h2>
+                        {% if current_document.status == 'completed' %}
+                            <a href="{% url 'download_text' current_document.id %}" class="btn btn-sm">Télécharger</a>
+                        {% endif %}
+                    </div>
+
+                    <!-- Informations -->
+                    <div class="result-info">
+                        <div class="info-row">
+                            <span class="info-label">Fichier:</span>
+                            <span class="info-value">{{ current_document.file_name }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Statut:</span>
+                            <span class="status-badge status-{{ current_document.status }}">
+                                {{ current_document.get_status_display }}
+                            </span>
+                        </div>
+                        {% if current_document.confidence_score %}
+                        <div class="info-row">
+                            <span class="info-label">Confiance:</span>
+                            <span class="info-value">{{ current_document.confidence_score|floatformat:1 }}%</span>
+                        </div>
+                        {% endif %}
+                        {% if current_document.language_detected %}
+                        <div class="info-row">
+                            <span class="info-label">Langue:</span>
+                            <span class="info-value">{{ current_document.language_detected }}</span>
+                        </div>
+                        {% endif %}
+                        {% if current_ocr_result %}
+                        <div class="info-row">
+                            <span class="info-label">Mots:</span>
+                            <span class="info-value">{{ current_ocr_result.word_count }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Caractères:</span>
+                            <span class="info-value">{{ current_ocr_result.character_count }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Texte extrait - AFFICHAGE DIRECT -->
+                    {% if current_document.status == 'completed' and current_document.extracted_text %}
+                    <div class="result-text-section">
+                        <div class="result-text-header">
+                            <h3>Texte extrait</h3>
+                            <button class="btn-icon" onclick="copyText()" title="Copier">
+                                📋
+                            </button>
+                        </div>
+                        <div class="extracted-text-container">
+                            <div class="extracted-text">{{ current_document.extracted_text }}</div>
+                        </div>
+                    </div>
+                    {% elif current_document.status == 'processing' %}
+                    <div class="result-processing">
+                        <div class="spinner-large"></div>
+                        <p>Traitement en cours...</p>
+                    </div>
+                    {% elif current_document.status == 'failed' %}
+                    <div class="result-error">
+                        <p><strong>Erreur:</strong> {{ current_document.error_message|default:"Une erreur est survenue" }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="card results-placeholder">
+                    <div class="placeholder-content">
+                        <p>📄</p>
+                        <p><strong>Prêt à extraire</strong></p>
+                        <span>Les résultats apparaîtront ici</span>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.ocr-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--spacing-lg);
+}
+
+.page-header {
+    margin-bottom: var(--spacing-xl);
+}
+
+.page-header h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.page-header p {
+    color: var(--color-text-secondary);
+}
+
+.ocr-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-xl);
+    align-items: start;
+}
+
+.card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+}
+
+.card h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: var(--spacing-lg);
+    color: var(--color-text-primary);
+}
+
+/* Formulaire */
+.upload-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.form-group label {
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+.file-upload-label {
+    cursor: pointer;
+}
+
+.file-upload-area {
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-xl);
+    text-align: center;
+    background: var(--color-background);
+    transition: all 0.2s;
+}
+
+.file-upload-area:hover {
+    border-color: var(--color-primary);
+    background: var(--color-surface);
+}
+
+.file-upload-icon {
+    font-size: 3rem;
+    margin-bottom: var(--spacing-md);
+}
+
+.file-upload-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-md);
+    font-weight: 500;
+}
+
+.file-upload-sub {
+    font-size: 0.9rem;
+    color: var(--color-text-secondary);
+    font-weight: normal;
+}
+
+.file-upload-formats {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
+.file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+
+.file-preview-container {
+    margin-top: var(--spacing-md);
+    text-align: center;
+}
+
+.file-preview-image {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: var(--radius-md);
+}
+
+.file-preview-icon {
+    font-size: 4rem;
+    color: var(--color-text-muted);
+}
+
+.file-selected-info {
+    margin-top: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+}
+
+.file-info-content {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.file-icon {
+    font-size: 1.5rem;
+}
+
+.file-info-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.file-name {
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.file-size {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+}
+
+.file-remove-btn {
+    background: none;
+    border: none;
+    color: var(--color-error);
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: var(--spacing-xs);
+}
+
+.form-help {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+}
+
+.form-errors {
+    color: var(--color-error);
+    font-size: 0.9rem;
+}
+
+/* Boutons */
+.btn {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background-color: var(--color-primary);
+    color: white;
+    width: 100%;
+}
+
+.btn-primary:hover {
+    background-color: var(--color-primary-hover);
+}
+
+.btn-secondary {
+    background-color: var(--color-secondary);
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #475569;
+}
+
+.btn-sm {
+    padding: var(--spacing-xs) var(--spacing-md);
+    font-size: 0.9rem;
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: var(--spacing-xs);
+}
+
+.btn-submit {
+    position: relative;
+    min-height: 44px;
+}
+
+.btn-loader {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+}
+
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Historique */
+.documents-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.document-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    color: inherit;
+}
+
+.document-item:hover {
+    background: var(--color-background);
+    border-color: var(--color-primary);
+    text-decoration: none;
+}
+
+.document-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.document-info strong {
+    font-weight: 600;
+}
+
+.document-date {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+}
+
+.status-badge {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.status-completed {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.status-processing {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.status-failed {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.status-pending {
+    background-color: #f1f5f9;
+    color: #475569;
+}
+
+.documents-footer {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border);
+    text-align: center;
+}
+
+/* Résultats */
+.results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.results-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.result-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-md);
+    background: var(--color-background);
+    border-radius: var(--radius-sm);
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.info-label {
+    font-weight: 500;
+    color: var(--color-text-secondary);
+}
+
+.info-value {
+    color: var(--color-text-primary);
+}
+
+.result-text-section {
+    margin-top: var(--spacing-lg);
+}
+
+.result-text-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+}
+
+.result-text-header h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.extracted-text-container {
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.extracted-text {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Courier New', monospace;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.result-processing {
+    text-align: center;
+    padding: var(--spacing-xl);
+}
+
+.spinner-large {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto var(--spacing-md);
+}
+
+.result-error {
+    padding: var(--spacing-lg);
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    border-radius: var(--radius-md);
+    color: #991b1b;
+}
+
+.results-placeholder {
+    text-align: center;
+    padding: var(--spacing-3xl);
+    color: var(--color-text-secondary);
+}
+
+.placeholder-content p {
+    font-size: 3rem;
+    margin-bottom: var(--spacing-md);
+}
+
+.placeholder-content strong {
+    display: block;
+    margin-bottom: var(--spacing-xs);
+    color: var(--color-text-primary);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .ocr-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .ocr-container {
+        padding: var(--spacing-md);
+    }
+    
+    .page-header h1 {
+        font-size: 1.5rem;
+    }
+    
+    .card {
+        padding: var(--spacing-md);
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/upload.js' %}"></script>
+<script>
+function copyText() {
+    const textElement = document.querySelector('.extracted-text');
+    if (!textElement) {
+        console.error('Élément .extracted-text non trouvé');
+        return;
+    }
+    const text = textElement.textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert('Texte copié !');
+        }).catch((err) => {
+            console.error('Erreur lors de la copie:', err);
+            alert('Erreur lors de la copie du texte');
+        });
+    } else {
+        // Fallback pour les navigateurs qui ne supportent pas l'API Clipboard
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            alert('Texte copié !');
+        } catch (err) {
+            console.error('Erreur lors de la copie:', err);
+            alert('Erreur lors de la copie du texte');
+        }
+        document.body.removeChild(textarea);
+    }
+}
+</script>
+{% endblock %}

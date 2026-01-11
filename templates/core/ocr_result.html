@@ -1,0 +1,284 @@
+{% extends "base/base.html" %}
+
+{% block title %}Résultat OCR - OCR Tool{% endblock %}
+
+{% block content %}
+<div class="ocr-result-container">
+    <div class="page-header">
+        <h1>Résultat OCR</h1>
+        <p>Texte extrait du document : {{ document.file_name }}</p>
+    </div>
+
+    <div class="result-section">
+        <!-- Informations du document -->
+        <div class="card info-card">
+            <h2>Informations du document</h2>
+            <dl class="info-list">
+                <dt>Nom du fichier :</dt>
+                <dd>{{ document.file_name }}</dd>
+                
+                <dt>Taille :</dt>
+                <dd>{{ document.file_size|filesizeformat }}</dd>
+                
+                <dt>Type :</dt>
+                <dd>{{ document.mime_type }}</dd>
+                
+                <dt>Date d'upload :</dt>
+                <dd>{{ document.uploaded_at|date:"d/m/Y H:i" }}</dd>
+                
+                {% if document.processed_at %}
+                <dt>Date de traitement :</dt>
+                <dd>{{ document.processed_at|date:"d/m/Y H:i" }}</dd>
+                {% endif %}
+                
+                {% if document.language_detected %}
+                <dt>Langue détectée :</dt>
+                <dd>{{ document.language_detected }}</dd>
+                {% endif %}
+                
+                {% if document.engine_used %}
+                <dt>Moteur OCR :</dt>
+                <dd>{{ document.engine_used }}</dd>
+                {% endif %}
+                
+                {% if document.confidence_score %}
+                <dt>Score de confiance :</dt>
+                <dd>{{ document.confidence_score|floatformat:2 }}%</dd>
+                {% endif %}
+                
+                <dt>Statut :</dt>
+                <dd><span class="status-badge status-{{ document.status }}">{{ document.get_status_display }}</span></dd>
+            </dl>
+        </div>
+
+        <!-- Résultat OCR -->
+        {% if document.status == 'completed' and document.extracted_text %}
+        <div class="card result-card">
+            <div class="result-header">
+                <h2>Texte extrait</h2>
+                <div class="result-actions">
+                    <a href="{% url 'download_text' document.id %}" class="btn btn-primary">Télécharger (.txt)</a>
+                    <a href="{% url 'ocr_tools' %}" class="btn btn-secondary">Nouveau document</a>
+                </div>
+            </div>
+            
+            {% if ocr_result %}
+            <div class="result-stats">
+                <span><strong>Mots :</strong> {{ ocr_result.word_count }}</span>
+                <span><strong>Caractères :</strong> {{ ocr_result.character_count }}</span>
+                {% if ocr_result.processing_time %}
+                <span><strong>Temps de traitement :</strong> {{ ocr_result.processing_time|floatformat:2 }}s</span>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            <div class="extracted-text">
+                <pre>{{ document.extracted_text }}</pre>
+            </div>
+        </div>
+        {% elif document.status == 'processing' %}
+        <div class="card processing-card">
+            <p>Le document est en cours de traitement. Veuillez actualiser la page dans quelques instants.</p>
+        </div>
+        {% elif document.status == 'failed' %}
+        <div class="card error-card">
+            <h2>Erreur lors du traitement</h2>
+            {% if document.error_message %}
+            <p class="error-message">{{ document.error_message }}</p>
+            {% else %}
+            <p>Une erreur s'est produite lors du traitement du document.</p>
+            {% endif %}
+            <a href="{% url 'ocr_tools' %}" class="btn btn-primary">Essayer un autre document</a>
+        </div>
+        {% else %}
+        <div class="card pending-card">
+            <p>Le document est en attente de traitement.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.ocr-result-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    color: #333;
+    margin-bottom: 0.5rem;
+}
+
+.page-header p {
+    color: #666;
+}
+
+.result-section {
+    display: grid;
+    gap: 2rem;
+}
+
+.info-card, .result-card, .processing-card, .error-card, .pending-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 2rem;
+}
+
+.info-list {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1rem;
+    margin: 0;
+}
+
+.info-list dt {
+    font-weight: 600;
+    color: #555;
+}
+
+.info-list dd {
+    margin: 0;
+    color: #333;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.status-completed {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-processing {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.status-failed {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.status-pending {
+    background-color: #e2e3e5;
+    color: #383d41;
+}
+
+.result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.result-header h2 {
+    margin: 0;
+}
+
+.result-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.result-stats {
+    display: flex;
+    gap: 2rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.extracted-text {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 1.5rem;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.extracted-text pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Courier New', monospace;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #333;
+}
+
+.error-card .error-message {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 1rem;
+    border-radius: 4px;
+    margin: 1rem 0;
+}
+
+.processing-card, .pending-card {
+    text-align: center;
+    padding: 3rem;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    text-decoration: none;
+    display: inline-block;
+    cursor: pointer;
+    font-size: 0.95rem;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #545b62;
+}
+
+@media (max-width: 768px) {
+    .result-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .result-actions {
+        width: 100%;
+    }
+    
+    .result-actions .btn {
+        flex: 1;
+        text-align: center;
+    }
+}
+</style>
+{% endblock %}

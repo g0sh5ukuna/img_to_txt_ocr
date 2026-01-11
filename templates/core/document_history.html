@@ -1,0 +1,188 @@
+{% extends "base/base.html" %}
+
+{% block title %}Historique - OCR Tool{% endblock %}
+
+{% block content %}
+<div class="history-container">
+    <div class="page-header">
+        <h1>Historique des documents</h1>
+        <p>Tous vos documents traités</p>
+    </div>
+
+    <div class="history-section">
+        {% if documents %}
+        <div class="documents-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nom du fichier</th>
+                        <th>Date</th>
+                        <th>Statut</th>
+                        <th>Confiance</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in documents %}
+                    <tr>
+                        <td>{{ doc.file_name }}</td>
+                        <td>{{ doc.uploaded_at|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <span class="status-badge status-{{ doc.status }}">
+                                {{ doc.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if doc.confidence_score %}
+                                {{ doc.confidence_score|floatformat:1 }}%
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if doc.status == 'completed' %}
+                                <a href="{% url 'ocr_result' doc.id %}" class="btn btn-sm btn-primary">Voir</a>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="card empty-state">
+            <p>Aucun document pour le moment.</p>
+            <a href="{% url 'ocr_tools' %}" class="btn btn-primary">Traiter un document</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.history-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    color: #333;
+    margin-bottom: 0.5rem;
+}
+
+.documents-table {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    overflow-x: auto;
+}
+
+.documents-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.documents-table thead {
+    background-color: #f8f9fa;
+}
+
+.documents-table th {
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.documents-table td {
+    padding: 1rem;
+    border-bottom: 1px solid #dee2e6;
+    color: #555;
+}
+
+.documents-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.status-completed {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-processing {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.status-failed {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.status-pending {
+    background-color: #e2e3e5;
+    color: #383d41;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+}
+
+.text-muted {
+    color: #6c757d;
+}
+
+.empty-state {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 3rem;
+    text-align: center;
+}
+
+.empty-state p {
+    margin-bottom: 1.5rem;
+    color: #666;
+}
+
+@media (max-width: 768px) {
+    .documents-table {
+        font-size: 0.9rem;
+    }
+    
+    .documents-table th,
+    .documents-table td {
+        padding: 0.5rem;
+    }
+}
+</style>
+{% endblock %}
